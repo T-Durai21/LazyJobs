@@ -14,20 +14,20 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | 1 | Application skeleton | done | verified: health 200, /docs 200, CORS preflight correct, 4 tables created |
 | 2 | Data model for identity | done | verified: identities unique on (provider, subject); users has no password_hash |
 | 3 | Google sign-in | done | verified: /me 401, unknown provider 404, unconfigured google 503, callback rejects missing state, second identity reuses the same user. Live Google round-trip needs GOOGLE_CLIENT_ID in .env |
-| 4 | GCP project and guardrails | not started | creates nothing chargeable. Budget alert goes in before any resource |
-| 5 | Local cloud-parity stack | not started | Docker Compose, Postgres 16, fake-gcs-server, Alembic. SQLite dropped here |
-| 6 | CV upload and profile | not started | Cloud Storage for the file, Vertex AI for extraction |
-| 7 | eJobs source | not started | |
-| 8 | ATS source and coverage check | not started | the Romania-eligible count gets recorded here |
-| 9 | Matching | not started | |
-| 10 | Applications API | not started | |
-| 11 | Cover letters | not started | Vertex AI |
+| 4 | GCP project and guardrails | not started | deferred: the fork runs locally only (LEARNING entry 27). Creates nothing chargeable. Budget alert goes in before any resource |
+| 5 | Local cloud-parity stack | done (local variant) | Alembic owns the schema (initial migration applied, create_all removed). Still SQLite and a local uploads folder: no Docker on the build machine. Postgres and fake-gcs remain the plan for the cloud path |
+| 6 | CV upload and profile | done | verified with a real PDF CV: name, headline, 44 skills, 5 years. File kept under UPLOAD_DIR. Extraction uses Claude when ANTHROPIC_API_KEY is set, keyword rules otherwise (entry 27) |
+| 7 | eJobs source | replaced | the fork targets India and global remote work: Remotive, Himalayas and the user's tracker CSV instead of eJobs. See docs/sources.md |
+| 8 | ATS source and coverage check | done | 51 Greenhouse/Lever/Ashby boards, 11,504 postings on 2026-09-29. Coverage: 1,148 relevant matches for the test profile, 395+ in strong-currency countries, ~110 India-only |
+| 9 | Matching | done | 10 unit tests. Adds relevance gate, place tiers (strong currency, open, India-only), big-employer and non-coding ordering, cached ranking |
+| 10 | Applications API | done | invalid transition 409, duplicate 409, submitted_at stamped once; tests in backend/tests |
+| 11 | Cover letters | done | Claude when a key is set, otherwise a plain template from the profile |
 
 ## Part 2 - Running on GCP
 
 | Phase | What | Status | Notes |
 | --- | --- | --- | --- |
-| 12 | Data plane | not started | Cloud SQL, bucket, secrets. The billing clock starts here, about $10 a month |
+| 12 | Data plane | not started | deferred (local only). Cloud SQL, bucket, secrets. The billing clock starts here, about $10 a month |
 | 13 | First deploy | not started | Artifact Registry, Cloud Run, live Google sign-in |
 | 14 | Scheduled refresh | not started | Cloud Run job plus Cloud Scheduler |
 | 15 | Deploy on push | not started | Cloud Build trigger on main |
@@ -36,11 +36,11 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 
 | Phase | What | Status | Notes |
 | --- | --- | --- | --- |
-| 16 | Shell and sign-in | not started | also makes the Dockerfile multi-stage |
-| 17 | Profile screen | not started | |
-| 18 | Matches screen | not started | |
-| 19 | Tracker screen | not started | |
-| 20 | Polish | not started | |
+| 16 | Shell and sign-in | done (no-build variant) | one static page in backend/app/static served by FastAPI; no Node on the build machine. Local sign-in via LOCAL_LOGIN_EMAIL, Google button when configured |
+| 17 | Profile screen | done | |
+| 18 | Matches screen | done | includes Open next 10 apply pages |
+| 19 | Tracker screen | done | |
+| 20 | Polish | in progress | light/dark, mobile width done; no accessibility pass yet |
 
 ## Part 4 - Operating it
 

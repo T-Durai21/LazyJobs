@@ -59,6 +59,8 @@ class Profile(Base):
     remote_only: Mapped[bool] = mapped_column(Boolean, default=False)
     min_salary: Mapped[int] = mapped_column(default=0)
     extra_keywords: Mapped[list] = mapped_column(JSON, default=list)
+    exclude_keywords: Mapped[list] = mapped_column(JSON, default=list)
+    prefer_non_coding: Mapped[bool] = mapped_column(Boolean, default=False)
 
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -83,6 +85,17 @@ class Job(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    salary_text: Mapped[str] = mapped_column(String(255), default="")
+    # Annual USD so postings in different currencies and periods can be ranked together.
+    salary_max_usd: Mapped[float] = mapped_column(Float, default=0)
+
+
+class SourceRun(Base):
+    __tablename__ = "source_runs"
+
+    source: Mapped[str] = mapped_column(String(32), primary_key=True)
+    last_run_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_count: Mapped[int] = mapped_column(default=0)
 
 
 # Review queue: a match becomes an application only once the user submits it themselves.

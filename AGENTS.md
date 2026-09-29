@@ -1,48 +1,45 @@
 # CV Applier
 
-A personal job-search assistant: parse a CV, match Romanian openings, draft cover
-letters, and track applications.
+A personal job-search assistant: parse a CV, match openings from global employers and
+remote job boards, draft cover letters, and track applications. This fork
+(T-Durai21/LazyJobs) runs locally only and targets a candidate in India looking for
+well-paid roles abroad or remote; see [LEARNING.md](LEARNING.md) entry 27.
 
 ## Stack
 
-- Backend: FastAPI, SQLAlchemy 2, in `backend/`
-- Frontend: Vite, React, TypeScript, Tailwind, in `frontend/` (not scaffolded yet)
-- Auth: Google OpenID Connect. Accounts are an email plus `identities` rows. There
-  is no password column.
-- Target platform: Google Cloud Platform in `europe-west1`. Cloud Run, Cloud SQL for
-  PostgreSQL, Cloud Storage, Vertex AI, provisioned with Terraform rather than the
-  console. See [PLAN.md](PLAN.md) section 4.
+- Backend: FastAPI, SQLAlchemy 2, Alembic, in `backend/`
+- Frontend: one static page, `backend/app/static/index.html`, served by FastAPI at `/`.
+  No build step. (The React plan in PLAN.md section 12 is deferred.)
+- Auth: Google OpenID Connect, plus a local sign-in for one's own machine
+  (`LOCAL_LOGIN_EMAIL`). Accounts are an email plus `identities` rows; no password column.
+- LLM: Claude via the Anthropic SDK when `ANTHROPIC_API_KEY` is set; rules and a template
+  otherwise.
+- Database: SQLite locally; the schema is owned by Alembic.
 
-## Running the backend
-
-The backend currently runs directly on the host against SQLite. Phase 5 replaces this
-with Docker Compose and PostgreSQL; until then:
+## Running it (Windows paths shown)
 
 ```
 cd backend
 python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload
+.venv\Scripts\pip install -r requirements.txt
+copy .env.example .env        # set LOCAL_LOGIN_EMAIL, optionally TRACKER_CSV_PATH and ANTHROPIC_API_KEY
+.venv\Scripts\alembic upgrade head
+.venv\Scripts\uvicorn app.main:app --port 8000
 ```
 
-Health check: `curl localhost:8000/api/health`. OpenAPI: `http://localhost:8000/docs`.
-CORS is locked to `FRONTEND_ORIGIN` (default `http://localhost:5173`).
+Open `http://localhost:8000`, sign in, upload a CV on Profile, then Fetch new jobs on
+Matches (the first fetch takes about two minutes). OpenAPI: `http://localhost:8000/docs`.
 
-Sign-in: set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `backend/.env`, then
-open `http://localhost:8000/api/auth/google/login`.
+Schema changes: edit `app/models.py`, then
+`.venv\Scripts\alembic revision --autogenerate -m "..."` and `alembic upgrade head`.
 
-There is no Alembic yet. `Base.metadata.create_all` runs on startup. If the schema
-changes before phase 5, delete `backend/cv_applier.db` and restart. Phase 5 replaces
-both of those with migrations, for the reasons in [LEARNING.md](LEARNING.md) entry 20.
+Tests: `.venv\Scripts\python -m pytest -q` from `backend/`.
 
 ## Cloud
 
-Nothing is deployed. No GCP project exists yet and nothing is being billed. The design,
-the cost model and the credit constraints are in [PLAN.md](PLAN.md) section 4; the
-Terraform and commands that create each resource are in [BUILD.md](BUILD.md) phases 4,
-12 to 15.
+Nothing is deployed and nothing is billed. The cloud design is in [PLAN.md](PLAN.md)
+section 4 and [BUILD.md](BUILD.md) phases 4 and 12 to 15; those phases are deferred in
+this fork.
 
 ## Docs
 
@@ -50,6 +47,10 @@ Subsystem docs live in `docs/` and are written in the same change as the code th
 describe.
 
 - [Authentication](docs/auth.md)
+- [Job sources](docs/sources.md)
+- [Matching](docs/matching.md)
+- [Profile, CV parsing and the LLM](docs/profile-and-llm.md)
+- [Applications and the frontend](docs/applications.md)
 - Design: [PLAN.md](PLAN.md)
 - Phase checklist: [BUILD.md](BUILD.md)
 - Live phase status: [PROGRESS.md](PROGRESS.md)

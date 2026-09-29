@@ -1,21 +1,17 @@
-from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from . import models  # noqa: F401 - import registers tables on Base before create_all
 from .config import settings
-from .db import Base, engine
+from .routers.applications import router as applications_router
 from .routers.auth import router as auth_router
+from .routers.jobs import router as jobs_router
+from .routers.profile import router as profile_router
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    yield
-
-
-app = FastAPI(title="CV Applier", lifespan=lifespan)
+# The schema is owned by Alembic: run `alembic upgrade head` before starting the app.
+app = FastAPI(title="CV Applier")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,8 +22,15 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(profile_router)
+app.include_router(jobs_router)
+app.include_router(applications_router)
 
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Mounted last so every /api route above wins over the static catch-all.
+app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="static")

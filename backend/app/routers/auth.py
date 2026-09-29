@@ -41,6 +41,30 @@ def logout() -> Response:
     return response
 
 
+@router.post("/local/login")
+def local_login(db: Session = Depends(get_db)) -> Response:
+    if not settings.local_login_email:
+        raise HTTPException(status_code=404, detail="Local sign-in is disabled")
+    identity = ExternalIdentity(
+        provider="local",
+        subject=settings.local_login_email.lower(),
+        email=settings.local_login_email,
+        email_verified=True,
+        name=settings.local_login_email.split("@")[0],
+        avatar_url="",
+    )
+    user = find_or_create_user(db, identity)
+    db.commit()
+    response = Response(status_code=204)
+    set_session_cookie(response, user.id)
+    return response
+
+
+@router.get("/config")
+def auth_config() -> dict:
+    return {"local": bool(settings.local_login_email), "google": bool(settings.google_client_id)}
+
+
 @router.get("/{provider}/login")
 def login(provider: str) -> RedirectResponse:
     chosen = get_provider(provider)

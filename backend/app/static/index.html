@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CV Applier</title>
+<style>
+  :root { --bg:#f6f6f3; --card:#fff; --text:#1c1c1c; --muted:#666; --line:#dedede; --accent:#1d5fd1; --good:#1f7a3a; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141414; --card:#1f1f1f; --text:#ececec; --muted:#a0a0a0; --line:#333; --accent:#7fa8f5; --good:#6fcf8a; --bad:#f2998f; } }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:1; }
+  header h1 { font-size:18px; margin:0; }
+  nav { display:flex; gap:4px; flex:1; }
+  nav button { background:none; border:0; color:var(--muted); padding:6px 10px; border-radius:6px; cursor:pointer; font:inherit; }
+  nav button.on { color:var(--text); background:var(--bg); font-weight:600; }
+  main { max-width:980px; margin:0 auto; padding:20px 16px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  input, textarea, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); font:inherit; }
+  textarea { min-height:80px; resize:vertical; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; } .row > * { flex:1; min-width:220px; }
+  button.primary, button.ghost { padding:7px 14px; border-radius:6px; cursor:pointer; font:inherit; }
+  button.primary { background:var(--accent); color:#fff; border:0; }
+  button.ghost { background:none; border:1px solid var(--line); color:var(--text); }
+  button:disabled { opacity:.5; cursor:default; }
+  .muted { color:var(--muted); font-size:13px; }
+  .score { font-weight:700; font-size:20px; min-width:48px; text-align:center; }
+  .job { display:flex; gap:14px; align-items:flex-start; }
+  .job h3 { margin:0; font-size:16px; } .job h3 a { color:var(--text); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .pill { display:inline-block; font-size:12px; padding:1px 8px; border-radius:10px; border:1px solid var(--line); color:var(--muted); margin-right:4px; }
+  .status { font-weight:600; text-transform:capitalize; }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--text); color:var(--bg); padding:8px 14px; border-radius:6px; display:none; max-width:90vw; }
+  .check { display:flex; align-items:center; gap:8px; margin-top:10px; } .check input { width:auto; }
+  @media (max-width:600px) { header { flex-wrap:wrap; } .job { flex-direction:column; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>CV Applier</h1>
+  <nav id="nav" hidden>
+    <button data-view="matches">Matches</button>
+    <button data-view="tracker">Tracker</button>
+    <button data-view="profile">Profile</button>
+  </nav>
+  <button class="ghost" id="logout" hidden>Sign out</button>
+</header>
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+
+<script>
+const main = document.getElementById("main");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const list = s => s.split(",").map(x => x.trim()).filter(Boolean);
+const STATUSES = ["matched", "drafted", "submitted", "interview", "rejected", "discarded"];
+const SOURCE_NAMES = { remotive: "Remotive", himalayas: "Himalayas", ats: "company careers page", tracker_csv: "your tracker CSV" };
+
+function toast(message) {
+  const t = document.getElementById("toast");
+  t.textContent = message; t.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.style.display = "none", 3500);
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, { credentials: "same-origin", ...options });
+  if (response.status === 401) { showSignIn(); throw new Error("Not signed in"); }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message = typeof body.detail === "string" ? body.detail : `Request failed (${response.status})`;
+    toast(message); throw new Error(message);
+  }
+  return response.status === 204 ? null : response.json();
+}
+const send = (path, method, body) => api(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+async function showSignIn() {
+  document.getElementById("nav").hidden = true;
+  document.getElementById("logout").hidden = true;
+  const config = await fetch("/api/auth/config").then(r => r.json());
+  main.innerHTML = `<div class="card"><h2>Sign in</h2>
+    ${config.google ? `<p><a class="primary" href="/api/auth/google/login"><button class="primary">Continue with Google</button></a></p>` : ""}
+    ${config.local ? `<p><button class="primary" id="local">Continue on this computer</button></p>` : ""}
+    ${!config.google && !config.local ? `<p class="muted">Set LOCAL_LOGIN_EMAIL or the Google client settings in backend/.env.</p>` : ""}</div>`;
+  document.getElementById("local")?.addEventListener("click", async () => {
+    await send("/api/auth/local/login", "POST", {}); start();
+  });
+}
+
+function jobMeta(job) {
+  const places = job.locations.length ? job.locations.slice(0, 3).join(", ") : (job.remote ? "Remote, worldwide" : "");
+  return `${esc(job.company)} · ${esc(places)}${job.employment_type ? " · " + esc(job.employment_type) : ""}`;
+}
+function jobPills(job) {
+  const pay = job.salary_max_usd ? `up to $${Math.round(job.salary_max_usd / 1000)}k/yr` : "";
+  return `${job.remote ? '<span class="pill">remote</span>' : ""}${pay ? `<span class="pill">${esc(pay)}</span>` : ""}<span class="pill">via ${esc(SOURCE_NAMES[job.source] || job.source)}</span>`;
+}
+
+async function showMatches() {
+  main.innerHTML = `<div class="card row" style="align-items:center">
+      <div><b>Matches</b><div class="muted">Ranked against your profile. Remotive and Himalayas refresh at most every 6 hours.</div></div>
+      <div style="flex:0;display:flex;gap:8px"><button class="primary" id="next10">Open next 10 apply pages</button><button class="ghost" id="refresh">Fetch new jobs</button></div></div>
+    <div id="list"><p class="muted">Loading...</p></div>`;
+  document.getElementById("refresh").onclick = async e => {
+    e.target.disabled = true; e.target.textContent = "Fetching (can take a few minutes)...";
+    try {
+      const report = await api("/api/jobs/refresh", { method: "POST" });
+      toast(Object.entries(report).map(([k, v]) => `${SOURCE_NAMES[k] || k}: ${v}`).join(" | "));
+      showMatches();
+    } finally { e.target.disabled = false; }
+  };
+  const matches = await api("/api/matches?limit=150");
+  document.getElementById("next10").onclick = async e => {
+    const batch = matches.filter(m => !m.application_id).slice(0, 10);
+    if (!batch.length) return toast("Everything shown is already tracked");
+    // Open synchronously inside the click so the browser counts them as user-initiated.
+    batch.forEach(m => window.open(m.job.apply_url, "_blank", "noopener"));
+    e.target.disabled = true;
+    for (const m of batch) await send("/api/applications", "POST", { job_id: m.job.id }).catch(() => {});
+    toast(`Opened ${batch.length}; they are in Tracker. If only one tab appeared, allow pop-ups for localhost.`);
+    showMatches();
+  };
+  const listEl = document.getElementById("list");
+  if (!matches.length) { listEl.innerHTML = `<p class="muted">No matches yet. Upload your CV on Profile, then fetch new jobs.</p>`; return; }
+  listEl.innerHTML = matches.map(m => `<div class="card job">
+      <div class="score">${m.score}</div>
+      <div style="flex:1">
+        <h3><a href="${esc(m.job.url)}" target="_blank" rel="noopener">${esc(m.job.title)}</a></h3>
+        <div class="muted">${jobMeta(m.job)}</div>
+        <div>${jobPills(m.job)}</div>
+        <div class="muted" style="margin-top:6px">${esc(m.reason)}</div>
+        <div class="actions">
+          ${m.application_id ? `<span class="status">${esc(m.application_status)}</span>`
+            : `<button class="primary" data-draft="${m.job.id}">Draft letter</button>
+               <button class="ghost" data-track="${m.job.id}">Track</button>
+               <button class="ghost" data-discard="${m.job.id}">Not interested</button>`}
+          <a href="${esc(m.job.apply_url)}" target="_blank" rel="noopener"><button class="ghost">Open apply page</button></a>
+        </div>
+      </div></div>`).join("");
+  listEl.onclick = async e => {
+    const b = e.target.closest("button"); if (!b) return;
+    const id = +(b.dataset.draft || b.dataset.track || b.dataset.discard); if (!id) return;
+    b.disabled = true;
+    try {
+      const app = await send("/api/applications", "POST", { job_id: id, draft_letter: !!b.dataset.draft });
+      if (b.dataset.discard) await send(`/api/applications/${app.id}`, "PATCH", { status: "discarded" });
+      toast(b.dataset.draft ? "Letter drafted; see Tracker" : b.dataset.discard ? "Hidden" : "Added to Tracker");
+      showMatches();
+    } catch { b.disabled = false; }
+  };
+}
+
+async function showTracker() {
+  const apps = await api("/api/applications");
+  const counts = STATUSES.map(s => `${s}: ${apps.filter(a => a.status === s).length}`).join(" · ");
+  main.innerHTML = `<div class="card"><b>Tracker</b><div class="muted">${counts}</div>
+      <label>Show</label><select id="filter"><option value="">All except discarded</option>${STATUSES.map(s => `<option>${s}</option>`).join("")}</select></div>
+    <div id="apps"></div>`;
+  const render = filter => {
+    const shown = apps.filter(a => filter ? a.status === filter : a.status !== "discarded");
+    document.getElementById("apps").innerHTML = shown.map(a => `<div class="card" data-id="${a.id}">
+        <div class="job"><div class="score">${Math.round(a.score)}</div><div style="flex:1">
+          <h3><a href="${esc(a.job.url)}" target="_blank" rel="noopener">${esc(a.job.title)}</a></h3>
+          <div class="muted">${jobMeta(a.job)}</div><div>${jobPills(a.job)}</div>
+          <div style="margin-top:6px"><span class="status">${esc(a.status)}</span>
+            <span class="muted">${a.submitted_at ? " · applied " + a.submitted_at.slice(0, 10) : ""} · updated ${a.updated_at.slice(0, 10)}</span></div>
+          ${a.cover_letter || a.status === "drafted" ? `<label>Cover letter</label><textarea data-field="cover_letter" rows="8">${esc(a.cover_letter)}</textarea>` : ""}
+          <label>Notes</label><textarea data-field="notes" rows="2">${esc(a.notes)}</textarea>
+          <div class="actions">
+            <button class="ghost" data-save>Save</button>
+            ${a.status === "matched" ? `<button class="primary" data-redraft>Draft letter</button>` : ""}
+            ${a.status === "drafted" ? `<button class="ghost" data-redraft>Redraft</button>
+              <a href="${esc(a.job.apply_url)}" target="_blank" rel="noopener"><button class="ghost">Open apply page</button></a>
+              <button class="primary" data-status="submitted">I applied</button>` : ""}
+            ${a.status === "submitted" ? `<button class="ghost" data-status="interview">Got interview</button><button class="ghost" data-status="rejected">Rejected</button>` : ""}
+            ${a.status === "interview" ? `<button class="ghost" data-status="rejected">Rejected</button>` : ""}
+            ${["matched", "drafted"].includes(a.status) ? `<button class="ghost" data-status="discarded">Discard</button>` : ""}
+          </div></div></div></div>`).join("") || `<p class="muted">Nothing here yet.</p>`;
+  };
+  const filterEl = document.getElementById("filter");
+  filterEl.onchange = () => render(filterEl.value);
+  render("");
+  document.getElementById("apps").onclick = async e => {
+    const b = e.target.closest("button"); if (!b) return;
+    const card = b.closest("[data-id]"); const id = card.dataset.id;
+    const fields = Object.fromEntries([...card.querySelectorAll("[data-field]")].map(t => [t.dataset.field, t.value]));
+    b.disabled = true;
+    try {
+      if (b.dataset.redraft !== undefined) { await api(`/api/applications/${id}/draft`, { method: "POST" }); toast("Letter drafted"); }
+      else if (b.dataset.status) {
+        if (b.dataset.status === "submitted" && !confirm("Mark as applied? Only do this after you submitted it on the company's site.")) { b.disabled = false; return; }
+        await send(`/api/applications/${id}`, "PATCH", { ...fields, status: b.dataset.status }); toast("Updated");
+      } else { await send(`/api/applications/${id}`, "PATCH", fields); toast("Saved"); }
+      showTracker();
+    } catch { b.disabled = false; }
+  };
+}
+
+async function showProfile() {
+  const p = await api("/api/profile");
+  main.innerHTML = `<div class="card"><b>CV</b>
+      <div class="muted">${p.cv_filename ? "Current: " + esc(p.cv_filename) : "No CV uploaded yet."} PDF or DOCX, up to 5 MB. Uploading replaces the fields below.</div>
+      <div class="row" style="margin-top:8px;align-items:center"><input type="file" id="cv" accept=".pdf,.docx"><div style="flex:0"><button class="primary" id="upload">Upload</button></div></div></div>
+    <form class="card" id="form"><b>Profile</b>
+      <div class="row"><div><label>Full name</label><input name="full_name" value="${esc(p.full_name)}"></div>
+        <div><label>Years of experience</label><input name="years_experience" type="number" step="0.5" value="${p.years_experience}"></div></div>
+      <label>Headline</label><input name="headline" value="${esc(p.headline)}">
+      <label>Summary</label><textarea name="summary">${esc(p.summary)}</textarea>
+      <label>Titles (comma separated)</label><input name="titles" value="${esc(p.titles.join(", "))}">
+      <label>Skills (comma separated)</label><textarea name="skills">${esc(p.skills.join(", "))}</textarea>
+      <b style="display:block;margin-top:18px">Search preferences</b>
+      <label>Preferred locations (comma separated; remote jobs restricted elsewhere are hidden)</label><input name="preferred_locations" value="${esc(p.preferred_locations.join(", "))}" placeholder="India, Chennai, APAC">
+      <label>Extra keywords to reward</label><input name="extra_keywords" value="${esc(p.extra_keywords.join(", "))}" placeholder="LLM evaluation, business analyst">
+      <label>Exclude jobs whose title or type contains</label><input name="exclude_keywords" value="${esc(p.exclude_keywords.join(", "))}" placeholder="contract, freelance, intern, part-time, trainer">
+      <label>Minimum pay, USD per year (0 = no minimum; only applied when a job states pay)</label><input name="min_salary" type="number" value="${p.min_salary}">
+      <div class="check"><input type="checkbox" name="remote_only" ${p.remote_only ? "checked" : ""} id="remote"><label for="remote" style="margin:0">Remote jobs only</label></div>
+      <div class="check"><input type="checkbox" name="prefer_non_coding" ${p.prefer_non_coding ? "checked" : ""} id="noncode"><label for="noncode" style="margin:0">Rank non-coding roles above developer roles</label></div>
+      <div class="actions"><button class="primary" type="submit">Save profile</button></div></form>`;
+  document.getElementById("upload").onclick = async e => {
+    const file = document.getElementById("cv").files[0]; if (!file) return toast("Choose a file first");
+    const body = new FormData(); body.append("file", file);
+    e.target.disabled = true; e.target.textContent = "Reading CV...";
+    try { await api("/api/profile/cv", { method: "POST", body }); toast("CV parsed; check the fields"); showProfile(); }
+    finally { e.target.disabled = false; e.target.textContent = "Upload"; }
+  };
+  document.getElementById("form").onsubmit = async e => {
+    e.preventDefault(); const f = new FormData(e.target);
+    await send("/api/profile", "PATCH", {
+      full_name: f.get("full_name"), headline: f.get("headline"), summary: f.get("summary"),
+      years_experience: +f.get("years_experience") || 0, titles: list(f.get("titles")), skills: list(f.get("skills")),
+      preferred_locations: list(f.get("preferred_locations")), extra_keywords: list(f.get("extra_keywords")),
+      exclude_keywords: list(f.get("exclude_keywords")), min_salary: +f.get("min_salary") || 0,
+      remote_only: f.get("remote_only") === "on", prefer_non_coding: f.get("prefer_non_coding") === "on",
+    });
+    toast("Profile saved");
+  };
+}
+
+const VIEWS = { matches: showMatches, tracker: showTracker, profile: showProfile };
+function go(view) {
+  document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+  VIEWS[view]().catch(() => {});
+}
+document.getElementById("nav").onclick = e => { if (e.target.dataset.view) go(e.target.dataset.view); };
+document.getElementById("logout").onclick = async () => { await api("/api/auth/logout", { method: "POST" }); showSignIn(); };
+
+async function start() {
+  try { await api("/api/auth/me"); } catch { return; }
+  document.getElementById("nav").hidden = false;
+  document.getElementById("logout").hidden = false;
+  const profile = await api("/api/profile");
+  go(profile.cv_filename ? "matches" : "profile");
+}
+start();
+</script>
+</body>
+</html>

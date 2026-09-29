@@ -357,6 +357,8 @@ keeps the cost bounded by a constant.
 
 ## 9. Use Vertex AI, not the AI Studio Gemini API
 
+**Superseded by**: entry 27, in the T-Durai21 local-only fork
+
 **Phase**: 4, GCP project and guardrails. Not built yet.
 
 **The problem**: The project runs on a Google Cloud free trial: $300 of credit, valid 90
@@ -414,6 +416,8 @@ print(c.models.generate_content(model='gemini-3.1-flash-lite', contents='ping').
 ---
 
 ## 10. Run PostgreSQL everywhere and drop SQLite entirely
+
+**Superseded by**: entry 27, in the T-Durai21 local-only fork
 
 **Phase**: 5, local cloud-parity stack. Not built yet.
 
@@ -612,6 +616,8 @@ The first lists three roles, the second shows the fourth.
 
 ## 14. Run a Cloud Storage emulator locally, not a storage abstraction
 
+**Superseded by**: entry 27, in the T-Durai21 local-only fork
+
 **Phase**: 5, local cloud-parity stack. Not built yet.
 
 **The problem**: Uploaded CVs go to Cloud Storage in production. Local development needs
@@ -792,6 +798,8 @@ Europe/Bucharest timezone, and `gcloud run jobs execute cv-applier-refresh
 ---
 
 ## 18. Ship the compiled frontend inside the backend image
+
+**Superseded by**: entry 27, in the T-Durai21 local-only fork
 
 **Phase**: 16, shell and sign-in. Not built yet.
 
@@ -1234,6 +1242,46 @@ resource.
 trigger as managed resources; the connection itself is absent from that list because it
 was always a data source, and `gcloud builds connections describe cv-applier-github
 --region=europe-west1` is what actually shows it exists.
+
+---
+
+## 27. Run the fork locally, for India and global remote work, with Claude as an optional LLM
+
+**Phase**: 5 to 20, built together on 2026-09-29 in this fork (T-Durai21/LazyJobs).
+
+**The problem**: The fork's user is in Chennai, targets non-coding and QA/AI roles at large
+global employers, and has no Docker, no Node.js and no Google Cloud billing account. The
+plan as written assumes all three and a Romanian job market.
+
+**What we did**: Kept the architecture and the API surface from PLAN.md and changed the
+parts that depended on the missing pieces. Alembic owns the schema but the database stays
+SQLite. CVs are kept in a local folder. The frontend is one static page served by FastAPI.
+eJobs is replaced by Remotive, Himalayas, 51 ATS boards of global employers and the user's
+own tracker CSV. The LLM is Claude through the Anthropic SDK when `ANTHROPIC_API_KEY` is
+set, and keyword rules plus a letter template when it is not. A local sign-in
+(`LOCAL_LOGIN_EMAIL`) stands in for Google so the app works before an OAuth client exists.
+
+**Why not the obvious alternative**: Installing Docker and Node, and opening a billing
+account, would have honoured the plan exactly and delayed a usable tool by days for a user
+who needed one the same evening. Every substitution sits behind the same function or
+endpoint the plan defines, so moving back to Postgres, Cloud Storage or a React build
+later touches one module each, not the callers.
+
+**The concept**: This reverses entry 9's "no keyless fallback" rule on purpose, and sets aside entries 10, 14
+and 18 for this fork. That rule
+was right when credentials came from the cloud project and could not be missing; here the
+key is optional and personal, so a path that works without it is live code rather than
+dead code. Matching also gained ordering rules the plan did not have - strong-currency
+countries first, India-only roles last, large employers and non-coding roles ahead - which
+encode this user's goal (higher pay in a stronger currency) rather than a general notion
+of relevance, and so live in `matching.py` beside the score, not in the score.
+
+**Expires when**: the fork is deployed anywhere other people can reach it (local sign-in
+must go, and the cloud phases resume), or when the user wants letters good enough that an
+API key stops being optional.
+
+**See it yourself**: `cd backend && .venv/Scripts/python -m pytest -q`, then start the app
+with `LOCAL_LOGIN_EMAIL` set and open `http://localhost:8000`.
 
 ---
 
