@@ -115,3 +115,11 @@ def test_title_order_in_profile_sets_role_priority():
     qa = job("QA Engineer", "SQL")
     ranked = rank([analyst, qa], profile(titles=["QA", "Business Analyst"]), NOW)
     assert [m.job.title for m in ranked] == ["QA Engineer", "Business Analyst"]
+
+
+def test_selenium_java_automation_is_not_pushed_down_as_coding():
+    automation = job("QA Automation Engineer", "Selenium with Java, TestNG, SQL, JIRA, UAT")
+    developer = job("QA Software Engineer", "Go microservices, SQL, JIRA, UAT")
+    ranked = rank([developer, automation], profile(titles=["QA"], prefer_non_coding=True), NOW)
+    assert ranked[0].job.title == "QA Automation Engineer"
+    assert not ranked[0].coding and ranked[1].coding

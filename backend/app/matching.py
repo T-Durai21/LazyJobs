@@ -97,6 +97,10 @@ def words(text: str) -> list[str]:
 DESCRIPTION_CHARS_SCANNED = 8000
 
 
+def selenium_java_role(index: str) -> bool:
+    return " selenium " in index and " java " in index
+
+
 def is_coding_role(title: str) -> bool:
     text = normalise(title)
     return any(contains_term(text, term) for term in CODING_TITLE_TERMS)
@@ -109,6 +113,7 @@ class Match:
     reason: str
     matched_skills: list[str] = field(default_factory=list)
     relevant: bool = True
+    coding: bool = False
 
 
 def rejection(job: Job, profile: Profile) -> str | None:
@@ -159,7 +164,9 @@ def score(job: Job, profile: Profile, now: datetime) -> Match:
     strong_currency = in_strong_currency_place(job)
     currency_points = 10 if strong_currency else 0
 
-    coding = is_coding_role(job.title)
+    # Selenium-with-Java test automation is coding the user already does, so it is not
+    # treated as the developer work that prefer_non_coding pushes down.
+    coding = is_coding_role(job.title) and not selenium_java_role(index)
     preference_points = 0
     if profile.prefer_non_coding:
         preference_points = -15 if coding else 10
@@ -171,6 +178,7 @@ def score(job: Job, profile: Profile, now: datetime) -> Match:
         reason=build_reason(matched, len(wanted_skills), job, coding, profile.prefer_non_coding, strong_currency),
         matched_skills=matched,
         relevant=title_points > 0 or len(matched) >= MIN_SKILLS_WITHOUT_TITLE,
+        coding=coding,
     )
 
 
@@ -234,7 +242,7 @@ def rank(jobs: list[Job], profile: Profile, now: datetime) -> list[Match]:
             title_priority(m.job.title, profile.titles),
             place_tier(m.job),
             m.job.source != "ats",
-            profile.prefer_non_coding and is_coding_role(m.job.title),
+            profile.prefer_non_coding and m.coding,
             -m.score,
         ),
     )
