@@ -74,7 +74,12 @@ def lever(slug: str, data: list) -> list[Posting]:
             locations=[place for place in locations if place],
             remote=job.get("workplaceType") == "remote" or is_remote(*locations),
             employment_type=categories.get("commitment", ""),
-            description=f"{job.get('descriptionPlain', '')}\n{job.get('additionalPlain', '')}",
+            # Lever keeps responsibilities and requirements in `lists`, not in the description.
+            description="\n".join([
+                job.get("descriptionPlain", ""),
+                *(f"{item.get('text', '')}\n{html_to_text(item.get('content', ''))}" for item in job.get("lists") or []),
+                job.get("additionalPlain", ""),
+            ]),
             posted_at=datetime.utcfromtimestamp(created / 1000) if created else None,
         ))
     return result

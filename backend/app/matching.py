@@ -217,14 +217,21 @@ def build_reason(
     return "; ".join(parts)
 
 
+def title_priority(title: str, targets: list[str]) -> int:
+    text = normalise(title)
+    return next((i for i, target in enumerate(targets) if target.strip() and contains_term(text, target)), len(targets))
+
+
 def rank(jobs: list[Job], profile: Profile, now: datetime) -> list[Match]:
     kept = [job for job in jobs if rejection(job, profile) is None]
     scored = (score(job, profile, now) for job in kept)
-    # Large global employers first within each place tier: the company-board watchlist is
-    # made up of them, and they pay far above the local market.
+    # The profile's titles are in the user's order of preference, so the role family decides
+    # first; within it, large global employers come first, since the company-board watchlist
+    # is made up of them and they pay far above the local market.
     return sorted(
         (m for m in scored if m.relevant),
         key=lambda m: (
+            title_priority(m.job.title, profile.titles),
             place_tier(m.job),
             m.job.source != "ats",
             profile.prefer_non_coding and is_coding_role(m.job.title),

@@ -105,5 +105,13 @@ def test_india_only_roles_come_last_even_with_higher_score():
     india = job("Business Analyst", "UAT SQL JIRA LLM evaluation", locations=["Bengaluru, India"])
     anywhere = job("QA Analyst", "SQL", locations=[])
     uk = job("QA Analyst", "SQL", locations=["London, United Kingdom"])
-    ranked = rank([india, anywhere, uk], profile(preferred_locations=["India", "United Kingdom"]), NOW)
+    same_family = profile(titles=["Analyst"], preferred_locations=["India", "United Kingdom"])
+    ranked = rank([india, anywhere, uk], same_family, NOW)
     assert [m.job.locations for m in ranked] == [["London, United Kingdom"], [], ["Bengaluru, India"]]
+
+
+def test_title_order_in_profile_sets_role_priority():
+    analyst = job("Business Analyst", "UAT SQL JIRA LLM evaluation")
+    qa = job("QA Engineer", "SQL")
+    ranked = rank([analyst, qa], profile(titles=["QA", "Business Analyst"]), NOW)
+    assert [m.job.title for m in ranked] == ["QA Engineer", "Business Analyst"]
